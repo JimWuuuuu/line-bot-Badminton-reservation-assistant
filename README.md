@@ -18,6 +18,7 @@
 設定參與狀態
 
 回覆「打」或「確定打」來確認本週參加活動。
+
 回覆「pass」、「不打」、「烙跑」來表示本週不參加活動。
 
 固定班底設定
@@ -48,7 +49,9 @@
 
 使用注意事項
 請確保所有指令輸入正確，包括名稱和狀態。
+
 參與狀態的有效值包括：「打」、「確定打」、「pass」、「不打」、「烙跑」、「固定班底」。
+
 若遇到問題或需要重置系統，請使用「重開機」指令。
 
 
@@ -56,14 +59,23 @@
 技術說明
 
 環境配置
+
 安裝 Python 和相關套件
+
 安裝 Flask 用於建立 Web 伺服器。
+
 安裝 LINE Bot SDK 用於與 LINE 平台互動。
+
 安裝 Schedule 用於定時任務管理。
+
 設定 Channel Access Token 和 Channel Secret
+
 CHANNEL_ACCESS_TOKEN = '0OHIdiUtl9Z9DsHIaOikgay3Z//Usjv0quMJqbeNdM73T9elpisz7NlxiXBtj+tUvExL83OYngxn81tC8RkHtT8cTn2cdhfzVUkMU8EVmYh7EWd9dctK1fUT4DL4ueXcMUhokw0hPf/TF+BB86IvxAdB04t89/1O/w1cDnyilFU='
+
 CHANNEL_SECRET = 'b1cb784730e763b483e953ec0ea5cc80'
+
 在 LINE Developer 平台取得 Channel Access Token 和 Channel Secret，並在程式碼中設定。
+
 
 運行伺服器
 使用 ngrok 來將本地伺服器暴露給互聯網，以便接收 LINE 的 Webhook 請求。
