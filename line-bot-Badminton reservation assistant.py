@@ -10,8 +10,8 @@ import threading
 app = Flask(__name__)
 
 # 設定 Channel Access Token 和 Channel Secret
-CHANNEL_ACCESS_TOKEN = 'UaowmmTPRWJPdF6x0FYS0smm1f71UHhuPTpc0sztFFbWKuef0z16PiTtk6/uFPW5vExL83OYngxn81tC8RkHtT8cTn2cdhfzVUkMU8EVmYiFAWJB/aOmx32LW07UC0a2F8NSnp3hEZcQ+kpdvflN8wdB04t89/1O/w1cDnyilFU='
-CHANNEL_SECRET = 'adf5d04f2c6e900b49b949fc991b06fc'
+CHANNEL_ACCESS_TOKEN = '0OHIdiUtl9Z9DsHIaOikgay3Z//Usjv0quMJqbeNdM73T9elpisz7NlxiXBtj+tUvExL83OYngxn81tC8RkHtT8cTn2cdhfzVUkMU8EVmYh7EWd9dctK1fUT4DL4ueXcMUhokw0hPf/TF+BB86IvxAdB04t89/1O/w1cDnyilFU='
+CHANNEL_SECRET = 'b1cb784730e763b483e953ec0ea5cc80'
 
 # 初始化 LineBotApi 和 WebhookHandler
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
@@ -31,36 +31,38 @@ this_week_participants = []
 
 def refresh_participant_list():
     participant_names = get_participant_names()
+    fixed_participant_names = get_fixed_participant_names()
     line_bot_api.broadcast(
         TextSendMessage(text=f"這禮拜打羽球的人有：{participant_names}\n\n"
-                            f"請記得給錢一人200元!!名單已刷新。"
+                             f"請記得給錢，一人200元，給劻!!名單已刷新。"
         )
     )
     global this_week_participants
-    # 在這個函數中更新參與名單
-    # 確保固定參與者保持不變
-    for user_id in fixed_participants:
-        if user_id not in weekly_fixed_participation:
-            weekly_fixed_participation[user_id] = True
-
     # 清除單次參與者名單
     weekly_participation.clear()
-
+    this_week_participants.clear()
+    
     # 更新這禮拜有要打的人員
-    this_week_participants = [user_id for user_id, participation in weekly_participation.items() if participation]
+    this_week_participants += [user_id for user_id, participation in weekly_participation.items() if participation]
 
-def ask_for_participants():
+    # 將固定參與者加入這禮拜有要打的人員
+    this_week_participants += fixed_participants.copy()
+
+def ask_for_participants(group_id):
     fixed_participant_names = get_fixed_participant_names()
-    line_bot_api.broadcast(
-        TextSendMessage(text=f"目前固定班底名單有：{fixed_participant_names}\n\n"
-                            f"請於今天晚上10:00前回覆「打」、「pass」來確認這禮拜是否要打羽球。"
+    participant_names = get_participant_names()
+    line_bot_api.push_message(
+        group_id,
+        TextSendMessage(text=f"固定班底名單有：{fixed_participant_names}\n\n"
+                             f"目前明天打羽球的人員有：{participant_names}\n\n"
+                             f"請於今天晚上10:00前回覆「打」、「pass」來確認這禮拜是否要打羽球。"
         )
     )
 
 def notify_participants():
     participant_names = get_participant_names()
     line_bot_api.broadcast(
-        TextSendMessage(text=f"明天打羽球的人員有：{participant_names}\n\n"
+        TextSendMessage(text=f"統計結束，明天打羽球的人員有：{participant_names}\n\n"
         )
     )
 
@@ -70,8 +72,6 @@ schedule.every().saturday.at("15:00").do(ask_for_participants)
 schedule.every().saturday.at("22:00").do(notify_participants)
 # 設定每週日晚上10:00刷新名單的定時任務
 schedule.every().sunday.at("22:00").do(refresh_participant_list)
-
-
 
 # 定義一個函數來在後台運行定時任務
 def run_schedule_thread():
@@ -118,11 +118,10 @@ def handle_message(event):
                 TextSendMessage(text=f"{get_weekly_participant_message(user_id)}這週要烙跑！")
             )
         elif user_id in fixed_participants:
-             # 如果是固定班底且在刷新名單前回覆了 "pass"，則將其從本週參與者中移除
-             this_week_participants.remove(user_id)
-             line_bot_api.reply_message(
-                 event.reply_token,
-                 TextSendMessage(text=f"{get_weekly_participant_message(user_id)}媽的固定班底還敢烙跑！")
+            this_week_participants.remove(user_id)
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"{get_weekly_participant_message(user_id)}媽的固定班底還敢烙跑！")
             )    
         else:
             line_bot_api.reply_message(
@@ -167,7 +166,7 @@ def handle_message(event):
         # 回覆訊息，顯示本週禮拜日的日期和參與者名單
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=f"這週{this_sunday.strftime('(%m/%d)')}晚上10:00要打的人有：{participant_names}")
+            TextSendMessage(text=f"這週{this_sunday.strftime('(%m/%d)')}晚上08:00要打的人有：{participant_names}")
         )
     elif message_text == "固定班底有誰":
         fixed_participant_names = get_fixed_participant_names()
@@ -181,6 +180,97 @@ def handle_message(event):
             event.reply_token,
             TextSendMessage(text="名單已重置！")
         )
+    elif message_text.startswith("修改人員"):
+        # 解析指令格式，格式為：修改參與人員 [名稱] [狀態]
+        parts = message_text.split(" ")
+        if len(parts) == 3:
+            name = parts[1]
+            status = parts[2]
+            modify_participant_status(name, status, event)
+        else:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="指令格式錯誤！請輸入：修改人員 [名稱] [狀態]")
+            )
+    else:
+        line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text="無效的指令！請重新輸入。")
+    )
+
+
+def modify_participant_status(name, status, event):
+    # 根據名稱找到對應的使用者 ID
+    user_id = find_user_id_by_name(name)
+    if user_id:
+        # 根據狀態修改參與者的狀態
+        if status in ["打", "確定打"]:
+            weekly_fixed_participation[user_id] = True
+            weekly_participation[user_id] = True
+            if user_id not in this_week_participants:
+                this_week_participants.append(user_id)
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"{get_weekly_participant_message(user_id)}這週要打！")
+            )
+        elif status in ["pass", "不打", "烙跑", "Pass"]:
+            if user_id in weekly_participation:
+                weekly_participation[user_id] = False
+                if user_id in this_week_participants:
+                    this_week_participants.remove(user_id)
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=f"{get_weekly_participant_message(user_id)}這週要烙跑！")
+                )
+            elif user_id in fixed_participants:
+                if user_id in this_week_participants:
+                    this_week_participants.remove(user_id)
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=f"{get_weekly_participant_message(user_id)}媽的固定班底還敢烙跑！")
+                )
+            else:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="該使用者並未參與本週活動！")
+                )
+        elif status == "固定班底":
+            if user_id not in fixed_participants:
+                fixed_participants.append(user_id)
+                weekly_fixed_participation[user_id] = True
+                weekly_participation[user_id] = True
+                if user_id not in this_week_participants:
+                    this_week_participants.append(user_id)
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=f"恭喜 {get_display_name(user_id)} 成為固定班底！")
+                )
+            else:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="該使用者已經是固定班底！")
+                )
+        else:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="無效的狀態！狀態應該為：打、不打、烙跑、固定班底")
+            )
+    else:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="找不到該使用者！")
+        )
+
+
+
+
+def find_user_id_by_name(name):
+    # 根據名稱找到對應的使用者 ID
+    for user_id in weekly_participation.keys():
+        profile = line_bot_api.get_profile(user_id)
+        if profile.display_name == name:
+            return user_id
+    return None
 
 
 def get_participant_names():
